@@ -14,12 +14,8 @@
     | A. setup |
     ------------
     Input:
-       $ grace-loops.py setup <inp-root-files-path> <tree-name=event> <n_files per input=10>
+       $ grace-loops.py setup <inp-root-files-path> <tree-name=events> <n_files per input=10>
     Output:
-        Run: `MakeClass()` on one of input root files trees:
-            <file.root>
-                     |-> <class.h>
-                     |-> <class.C>
         Generates file tree:
             .
             ├-- Makefile
@@ -65,7 +61,7 @@
         Run: `MakeClass()` on one of input root files trees:
     
     ---------------
-    | C. add_loop |
+    | C. add-loop |
     ---------------
     Input:
        $ grace-loops.py add-loop <loop-name>
@@ -87,7 +83,7 @@
     --------------
     | User usage |
     --------------
-        1. $ grace-loops.py <path-to-input> <tree-name=event> <files-per-input=10>
+        1. $ grace-loops.py <path-to-input> <tree-name=events> <files-per-input=10>
         2. edit _x.cxx
         3. $ sbatch sub-slurm/test_loop.sh
            generates files in out-data:
@@ -628,7 +624,7 @@ void $KEY_loop_name(events& dat, string _options) {
 }
 
 #   ------------------------------
-#   | program module: "add_loop" |
+#   | program module: "add-loop" |
 #   ------------------------------
 #    note: this is called by "setup" to make the initial loop "test_loop"
 #          and therefore must be defined first
@@ -889,13 +885,13 @@ if len(argv) == 1:
         hadd()
         exit(0)
 
-if argv[1] == 'add_loop':
+if argv[1] == 'add-loop':
     for F in ('Makefile','src/main.cxx','src/events.h'):
         if not os.path.isfile(F):
-            print(f'fatal: required file "{F}" not present for add_loop')
+            print(f'fatal: required file "{F}" not present for add-loop')
             exit(2)
     if len(argv)<3:
-        print('fatal: to run add_loop a third argument is required')
+        print('fatal: to run add-loop a third argument is required')
     loop_name = argv[2]
     if os.path.isfile(f'src/{loop_name}'):
         print(f'fatal: loop file  src/{loop_name}.cxx is already present.')
@@ -915,7 +911,7 @@ elif argv[1] == 'setup':
         setup(argv[2],argv[3],int(argv[4]))
 else:
     print(''' Script usage: There are options:
-$ grace-loops.py setup <inp-root-files-path> <tree-name=event> <n_files per input=10>
+$ grace-loops.py setup <inp-root-files-path> <tree-name=events> <n_files per input=10>
 $ grace-loops.py hadd <loop-name>
 $ grace-loops.py add-loop <loop-name>
 
