@@ -19,8 +19,8 @@
        $ grace-loops.py --setup PATH
 
        Uses options with defaults:
-           - TREE_NAME (default: 'events') TTree name in ROOT files
-           - N_FILES   (default: 10)       number of ROOT files per SLURM submission
+           --tree-name  (default: 'events') TTree name in ROOT files
+           --n-files    (default: 10)       number of ROOT files per SLURM submission
 
        PATH may either be a directory containing the ROOT files, or a file containing that path
 
@@ -1004,8 +1004,6 @@ def parse_args():
     args = parser.parse_args()
 
     if not (args.setup or args.add_loop or args.hadd):
-        # print("Required to select mode with one of 3 optional arguments: [-s | -a | -d]\n")
-        # print(' fatal: failed to selection option -s | -a | -d\n\n')
         parser.print_help()
         exit()
 
@@ -1013,7 +1011,6 @@ def parse_args():
     return args
 
     
-#----tempary for testing
 if __name__ == "__main__":
     args = parse_args()
     if args.setup:
@@ -1023,48 +1020,3 @@ if __name__ == "__main__":
     elif args.add_loop:
         add_loop(args.add_loop) 
     exit(0)
-        # Check if the setup path exists, or if it is a file
-# print(f'argv:{argv}')
-# if len(argv) == 1:
-    # if not os.path.isfile('bin/main'):
-        # argv.append('setup')
-        # argv.append('/gpfs/loomis/scratch60/caines/djs232/AN/pAu_JetEmb/TrackEfficiency')
-        # argv.append('primary')
-        # argv.append(20)
-    # else:
-        # hadd()
-        # exit(0)
-
-# if argv[1] == 'add-loop':
-#     for F in ('Makefile','src/main.cxx','src/events.h'):
-#         if not os.path.isfile(F):
-#             print(f'fatal: required file "{F}" not present for add-loop')
-#             exit(2)
-#     if len(argv)<3:
-#         print('fatal: to run add-loop a third argument is required')
-#     loop_name = argv[2]
-#     if os.path.isfile(f'src/{loop_name}'):
-#         print(f'fatal: loop file  src/{loop_name}.cxx is already present.')
-#         exit(2)
-#     add_loop(loop_name)
-# elif argv[1] == 'hadd':    
-#     if len(argv) > 2:
-#         hadd(argv[2])
-#     else:
-#         hadd()
-# elif argv[1] == 'setup':
-#     if len(argv) == 3:
-#         setup(argv[2])
-#     elif len(argv) == 4:
-#         setup(argv[2],argv[3])
-#     elif len(argv) > 4:
-#         setup(argv[2],argv[3],int(argv[4]))
-# else:
-#     print(''' Script usage: There are options:
-# $ grace-loops.py setup <inp-root-files-path> <tree-name=events> <n_files per input=10>
-# $ grace-loops.py hadd <loop-name>
-# $ grace-loops.py add-loop <loop-name>
-
-# Also see documentation in start of script.
-# ''')
-#     exit(0)
