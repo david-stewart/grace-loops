@@ -5,16 +5,29 @@
     here on GRACE, in parallel. 
 
     It may be run in three modes:
-    A. setup
-    B. hadd
-    C. add loop
+    A. -s, --setup
+    B. -d, --hadd
+    C. -a, --add-loop
 
     These modes are as follow:
     ------------
     | A. setup |
     ------------
     Input:
-       $ grace-loops.py setup <inp-root-files-path> <tree-name=events> <n_files per input=10>
+       $ grace-loops.py -s PATH
+       -or equivalent-
+       $ grace-loops.py --setup PATH
+
+       Uses options with defaults:
+           - TREE_NAME (default: 'events') TTree name in ROOT files
+           - N_FILES   (default: 10)       number of ROOT files per SLURM submission
+
+       PATH may either be a directory containing the ROOT files, or a file containing that path
+
+       Can change option defaults values ("new_tree_name" and "50" here):
+       $ grace-loops.py -s PATH -t new_tree_name -n 50
+        
+
     Output:
         Generates file tree:
             .
@@ -48,42 +61,52 @@
     ------------
     | B. hadd  |
     ------------
+    To run use option: -d, --hadd
+
     Input:
-       $ grace-loops.py hadd <loop-name=last-loop-name-generate>
+       $ grace-loops.py -d LOOP_NAME
+       -or equivalent-
+       $ grace-loops.py --hadd  LOOP_NAME
+
     Output:
            Generates hadd file:
             ├-- out-data
-            |   |-- test_loop
+            |   |-- LOOP_NAME
             |       ├-- hadd.root <- This file
             |       |-- out-files
             |           |-- ...
         
-        Run: `MakeClass()` on one of input root files trees:
-    
     ---------------
     | C. add-loop |
     ---------------
+    To run use option: -a, --add-loop
+
     Input:
-       $ grace-loops.py add-loop <loop-name>
+       $ grace-loops.py -a LOOP_NAME
+       -or equivalent-
+       $ grace-loops.py -a LOOP_NAME
+       -or equivalent-
+       $ grace-loops.py --add-loop  LOOP_NAME
+
     Output:
             Add/modifies files as follows:
             ├-- sub-slurm
-            |   |-- <loop-name>.sh (new file)
+            |   |-- LOOP_NAME.sh (new file)
             ├-- src
-            |   ├-- events.h   (add friend function for function <loop-name>)
-            |   ├-- main.cxx   (add call function for <loop-name>)
-            |   |-- <loop-name>.cxx (skeleton code for new loop)
-            ├-- Makefile (modified to compile with ./src/<loop-name>.cxx)
-            ├-- _x.cxx -> ./src/<loop-name>.cxx (update soft link)
+            |   ├-- events.h   (add friend function for function LOOP_NAME)
+            |   ├-- main.cxx   (add call function for LOOP_NAME)
+            |   |-- LOOP_NAME.cxx (skeleton code for new loop)
+            ├-- Makefile (modified to compile with ./src/LOOP_NAME.cxx)
+            ├-- _x.cxx -> ./src/LOOP_NAME.cxx (update soft link)
             |-- out-data
-                |-- <loop-name>
+                |-- LOOP_NAME
                     |-- out-files
 
 
     --------------
     | User usage |
     --------------
-        1. $ grace-loops.py <path-to-input> <tree-name=events> <files-per-input=10>
+        1. $ grace-loops.py --setup --path PATH
         2. edit _x.cxx
         3. $ sbatch sub-slurm/test_loop.sh
            generates files in out-data:
@@ -96,13 +119,19 @@
         4. $ grace-loops.py hadd test_loop
         5. use ./out-data/test_loop/hadd.root
         6. For as many user loops as needed:
-           1. $ grace-loops.py add-loop <loop-name>
+           1. $ grace-loops.py --add-loop -l LOOP_NAME
            2. repeat steps 2.-5.
 
+
+    2021.01.06:
+        Two improvements required:
+            1. modify setup to take the input path in an input file:
+                path:PATH
+            2. automatically fix error in redundant TBranch names (bug in result of ROOT's TTree->MakeClass function)
 '''
 
 from string import Template
-import subprocess, os
+import subprocess, os, argparse
 from sys import argv
 from glob import glob
 from pathlib import Path
@@ -606,13 +635,18 @@ void $KEY_loop_name(events& dat, string _options) {
     }
 
     // Histogram declarations here:
+    // TH1D hg {"hg", "a;b;c", 10, 0., 1.};
 
 
     // Run loop here:
     while (dat.next()) {
-        cout << " Doing nothing in event " << dat.jentry << endl;
-        dat.log  << " Doing nothing in event " << dat.jentry << endl;
+        // cout << " Doing nothing in event " << dat.jentry << endl;
+        // dat.log  << " Doing nothing in event " << dat.jentry << endl;
+        // hg.Fill( x );
     }
+
+    // Write histograms here
+    // hg.Write();
 
 
     // Wrap-up work here:
@@ -623,12 +657,74 @@ void $KEY_loop_name(events& dat, string _options) {
 
 }
 
+def fix_double_branches(file_name):
+    '''Under the certain conditions, ROOT's TTree->MakeClass("name") will
+       make multiple TBranchs of the same name. This is cause c++ to not 
+       compile the code as desired.
+
+       Input:
+           file name
+       Process:
+           Check all the TBranch lines for double names and rename duplicates to unique values
+       Output:
+           Number of duplicates found and fixed       
+   '''
+    if not os.path.isfile(file_name):
+        print(f'fatal: cannot find input file {file_name} in function "fix_double_branches"')
+        exit()
+
+    collect_lines = []
+    n_subs = 0;
+    name_set = set();
+    re_name = None
+    if (file_name[-2:] == '.h'):
+        re_name = re.compile(r'(\s*TBranch\W+\*)(\w+)(;.*)')
+    elif (file_name[-4:] == '.cxx' or file_name[-2:] == '.C'):
+        re_name = re.compile(r'(\s*fChain->SetBranchAddress.*\&)(\w+)(.*)')
+    else:
+        print('fatal: argument to fix_double_branches doesn\'t end in .h .cxx or .C')
+        exit()
+
+    for line in open(file_name,'r').readlines():
+        line = line.rstrip();
+        match = re_name.match(line)
+        if match:
+            name = match.group(2)
+            if name in name_set:
+                n_subs += 1
+                i = 0
+                name = f"{name}_{i}"
+                while name in name_set:
+                    i += 1
+                    name = f"{name}_{i}"
+            collect_lines.append(f'{match.group(1)}{name}{match.group(3)}')
+            name_set.add(name)    
+        else:
+            collect_lines.append(line)
+    if n_subs:
+        with open(file_name,'w') as f_out:
+            f_out.write('\n'.join(collect_lines))
+    return n_subs
+
+# if __name__ == '__main__':
+    # n_subs = fix_double_branches("src/events.cxx")     
+    # print(f'n_subs: {n_subs}')
+
 #   ------------------------------
 #   | program module: "add-loop" |
 #   ------------------------------
 #    note: this is called by "setup" to make the initial loop "test_loop"
 #          and therefore must be defined first
 def add_loop(loop_name, templates=None):
+    for F in ('Makefile','src/main.cxx','src/events.h'):
+        if not os.path.isfile(F):
+            print(f'fatal: required file "{F}" not present for add-loop')
+            exit(2)
+
+    if os.path.isfile(f'src/{loop_name}.cxx'):
+        print(f'fatal: loop file  src/{loop_name}.cxx is already present.')
+        exit(2)
+
     if not templates:
         templates = gen_dict()
 
@@ -695,8 +791,20 @@ def setup(in_path, tree_name='events', max_nfiles=10):
     #------------------------------------------------
     #| Find input *.root file and make events.{C.h} |
     #------------------------------------------------
+    if not os.path.isdir(in_path) and os.path.isfile(in_path):
+        for lines in open(in_path,'r').readlines():
+            L = lines.strip()
+            if len(L) == 0 or L[0] == '#':
+                continue
+            print(f'Found input directory {L} in file {in_path}')
+            in_path = L
+            break
+        # see if in_path is a file that contains the path
     if not os.path.isdir(in_path):
         exit(f'fatal: input directory {in_path} not found')
+
+    # print("LION exit")
+    # exit()
 
     in_files = glob(f'{in_path}/*.root')
     if len(in_files) == 0:
@@ -839,6 +947,13 @@ EOF
     #-------------------------
     add_loop ("test_loop", templates)
 
+    #----------------------------------
+    #| Fix potential double  branches |
+    #----------------------------------
+    nsubs = fix_double_branches('src/events.h')
+    if nsubs > 0:
+        fix_double_branches('src/events.cxx')
+
 def hadd(name=None):
     if not name:
         text = Path('Makefile').read_text()
@@ -868,53 +983,88 @@ def hadd(name=None):
     except:
         pass
 
-
 #-------------------------
 #| start main program    |
 #-------------------------
+def parse_args():
+    parser = argparse.ArgumentParser(
+            description="Required: run in one of 3 selected modes: [-s | -a | -d]")
+    parser_mode = parser.add_mutually_exclusive_group()
+    # one of three required modes
+    parser_mode.add_argument('-s','--setup',  help='input path or file-containing-path; '
+            ' uses TREE_NAME & N_FILES')
+    parser_mode.add_argument('-a','--add-loop', help='add a loop')
+    parser_mode.add_argument('-d','--hadd',     help='hadd an existing loop')
+
+    # individual arguments
+    parser.add_argument('-t','--tree-name', 
+            help='Name of TTree in ROOT files. Default:"events"', type=str, default="events")
+    parser.add_argument('-n','--n-files',   
+            help="Number of files per SLURM submission. Default:10", type=int, default=10)
+    args = parser.parse_args()
+
+    if not (args.setup or args.add_loop or args.hadd):
+        # print("Required to select mode with one of 3 optional arguments: [-s | -a | -d]\n")
+        # print(' fatal: failed to selection option -s | -a | -d\n\n')
+        parser.print_help()
+        exit()
+
+    # print(args)
+    return args
+
     
 #----tempary for testing
-print(f'argv:{argv}')
-if len(argv) == 1:
-    if not os.path.isfile('bin/main'):
-        argv.append('setup')
-        argv.append('/gpfs/loomis/scratch60/caines/djs232/AN/pAu_JetEmb/TrackEfficiency')
-        argv.append('primary')
-        argv.append(20)
-    else:
-        hadd()
-        exit(0)
-
-if argv[1] == 'add-loop':
-    for F in ('Makefile','src/main.cxx','src/events.h'):
-        if not os.path.isfile(F):
-            print(f'fatal: required file "{F}" not present for add-loop')
-            exit(2)
-    if len(argv)<3:
-        print('fatal: to run add-loop a third argument is required')
-    loop_name = argv[2]
-    if os.path.isfile(f'src/{loop_name}'):
-        print(f'fatal: loop file  src/{loop_name}.cxx is already present.')
-        exit(2)
-    add_loop(loop_name)
-elif argv[1] == 'hadd':    
-    if len(argv) > 2:
-        hadd(argv[2])
-    else:
-        hadd()
-elif argv[1] == 'setup':
-    if len(argv) == 3:
-        setup(argv[2])
-    elif len(argv) == 4:
-        setup(argv[2],argv[3])
-    elif len(argv) > 4:
-        setup(argv[2],argv[3],int(argv[4]))
-else:
-    print(''' Script usage: There are options:
-$ grace-loops.py setup <inp-root-files-path> <tree-name=events> <n_files per input=10>
-$ grace-loops.py hadd <loop-name>
-$ grace-loops.py add-loop <loop-name>
-
-Also see documentation in start of script.
-''')
+if __name__ == "__main__":
+    args = parse_args()
+    if args.setup:
+        setup(args.setup, args.tree_name, args.n_files)
+    elif args.hadd:
+        hadd(args.hadd)
+    elif args.add_loop:
+        add_loop(args.add_loop) 
     exit(0)
+        # Check if the setup path exists, or if it is a file
+# print(f'argv:{argv}')
+# if len(argv) == 1:
+    # if not os.path.isfile('bin/main'):
+        # argv.append('setup')
+        # argv.append('/gpfs/loomis/scratch60/caines/djs232/AN/pAu_JetEmb/TrackEfficiency')
+        # argv.append('primary')
+        # argv.append(20)
+    # else:
+        # hadd()
+        # exit(0)
+
+# if argv[1] == 'add-loop':
+#     for F in ('Makefile','src/main.cxx','src/events.h'):
+#         if not os.path.isfile(F):
+#             print(f'fatal: required file "{F}" not present for add-loop')
+#             exit(2)
+#     if len(argv)<3:
+#         print('fatal: to run add-loop a third argument is required')
+#     loop_name = argv[2]
+#     if os.path.isfile(f'src/{loop_name}'):
+#         print(f'fatal: loop file  src/{loop_name}.cxx is already present.')
+#         exit(2)
+#     add_loop(loop_name)
+# elif argv[1] == 'hadd':    
+#     if len(argv) > 2:
+#         hadd(argv[2])
+#     else:
+#         hadd()
+# elif argv[1] == 'setup':
+#     if len(argv) == 3:
+#         setup(argv[2])
+#     elif len(argv) == 4:
+#         setup(argv[2],argv[3])
+#     elif len(argv) > 4:
+#         setup(argv[2],argv[3],int(argv[4]))
+# else:
+#     print(''' Script usage: There are options:
+# $ grace-loops.py setup <inp-root-files-path> <tree-name=events> <n_files per input=10>
+# $ grace-loops.py hadd <loop-name>
+# $ grace-loops.py add-loop <loop-name>
+
+# Also see documentation in start of script.
+# ''')
+#     exit(0)
