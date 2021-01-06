@@ -874,13 +874,15 @@ EOF
     code_snippets = dict()
     static_constexpr = re.compile('(   static constexpr Int_t \w+ = )(\d*);')
     KEY_constexpr = []
+    print('Finding max values for arrays and setting them to 4x(max(max_val, 20))')
     for x in static_constexpr.findall(text):
-        print(x)
         val = int(x[1])
+        val0 = val
         if val < 20:
             val = 20
         val *= 4
         KEY_constexpr.append(f"{x[0]}{val};")
+        print(f'{x[0]}   {val0} -> {val}')
     code_snippets['KEY_constexpr'] = "// Fixed size dimensions of " +\
             "array or collections " +\
             "stored in the TTree if any.\n"+"\n".join(KEY_constexpr)
