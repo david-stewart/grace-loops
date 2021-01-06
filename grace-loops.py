@@ -874,8 +874,11 @@ EOF
     code_snippets = dict()
     static_constexpr = re.compile('(   static constexpr Int_t \w+ = )(\d*);')
     KEY_constexpr = []
-    print('Finding max values for arrays and setting them to 4x(max(max_val, 20))')
+    if first = True
     for x in static_constexpr.findall(text):
+        if first:
+            first = False
+            print('Finding max values for arrays and setting them to 4x(max(max_val, 20))')
         val = int(x[1])
         val0 = val
         if val < 20:
