@@ -877,7 +877,7 @@ EOF
     first = True
     for x in static_constexpr.findall(text):
         if first:
-            first =- False
+            first = False
             print('Finding max values for arrays and setting them to 4x(max(max_val, 20))')
         val = int(x[1])
         val0 = val
