@@ -48,6 +48,7 @@
             |   ├-- list_0.list (each list with n_files)
             |   ├-- list_1.list
             |   |-- ...
+            |   |-- list_all.list
             ├-- bin/
             ├-- obj/
             ├-- out-data
@@ -576,7 +577,7 @@ int main(int nargs, char** argv) {
      */
 
     int n_events          {  (nargs>1) ? atoi(argv[1]) : 100 };
-    string inp_list       {  (nargs>2) ? argv[2] : "in-lists/list_0.list" };
+    string inp_list       {  (nargs>2) ? argv[2] : "in-lists/list_all.list" };
     string which_loop     {  (nargs>3) ? argv[3] : "test_loop" };
     string o_name_tag     {  (nargs>4) ? argv[4] : "test_loop" };
 
@@ -855,15 +856,18 @@ EOF
     #------------------------------
     file_cnt = 0
     entry_cnt = 0
+    fout_all = open(f'in-lists/list_all.list','w')
     for name_file in in_files:
         if (entry_cnt == 0):
             fout = open(f'in-lists/list_{file_cnt}.list','w')
             file_cnt += 1
         fout.write(f'{name_file}\n')
+        fout_all.write(f'{name_file}\n')
         entry_cnt += 1
         if entry_cnt == max_nfiles:
             entry_cnt = 0
-
+    fout_all.close()
+    
     #------------------------------------------------
     #| Get the required code snippets from events.h |
     #------------------------------------------------
