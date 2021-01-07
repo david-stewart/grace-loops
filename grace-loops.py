@@ -148,7 +148,7 @@ from pathlib import Path
 import re
 
 def gen_dict():
-    ''' Make the input dictionary used in generated the input files '''
+    ''' Make the input dictionary used in generating the input files '''
     return {
 
 'Makefile' : 
@@ -955,13 +955,8 @@ EOF
     with open('./src/events.cxx','w') as fout:
         fout.write(templates['events.cxx'].substitute(**code_snippets))
 
-    # try:    
     with open('./src/main.cxx','w') as fout:
         fout.write(templates['main.cxx'])
-    # except:
-        # os.remove('./src/main.cxx')
-        # with open('./src/main.cxx','w') as fout:
-            # fout.write(templates['main.cxx'])
 
     for suffix in ('cxx','h'):
         with open(f'./src/MemTimeProgression.{suffix}','w') as fout:
