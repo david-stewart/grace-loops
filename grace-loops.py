@@ -122,7 +122,7 @@
     | User usage |
     --------------
         1. $ grace-loops.py --setup --path PATH
-        2. edit _x.cxx
+        2. edit _x.cxx -> src/test_loop.cxx
         3. $ sbatch sub-slurm/test_loop.sh
            generates files in out-data:
             ├-- out-data
@@ -134,15 +134,10 @@
         4. $ grace-loops.py hadd test_loop
         5. use ./out-data/test_loop/hadd.root
         6. For as many user loops as needed:
-           1. $ grace-loops.py --add-loop -l LOOP_NAME
-           2. repeat steps 2.-5.
-
-
-    2021.01.06:
-        Two improvements required:
-            1. modify setup to take the input path in an input file:
-                path:PATH
-            2. automatically fix error in redundant TBranch names (bug in result of ROOT's TTree->MakeClass function)
+           *  $ grace-loops.py --add-loop LOOP_NAME
+              -or-
+              $ grace-loops.py --copy-loop LOOP_FROM LOOP_TO
+           *  repeat steps 2.-5.
 '''
 
 from string import Template
