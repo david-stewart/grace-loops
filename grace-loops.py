@@ -8,6 +8,7 @@
     A. -s, --setup
     B. -d, --hadd
     C. -a, --add-loop
+    D. -c, --copy-loop
 
     These modes are as follow:
     ------------
@@ -103,6 +104,19 @@
                 |-- LOOP_NAME
                     |-- out-files
 
+
+    ----------------
+    | D. copy-loop |
+    ----------------
+    Input:
+        $ grace-loops.py --copy-loop LOOP_FROM LOOP_TO
+
+    Output:
+        Will generate a new loop LOOP_TO just like $grace-loops -a LOOP_TO, but
+        will copy over the code from ./src/LOOP_FROM.cxx and
+        ./sub-slurm/LOOP_FROM.sh so that you can edit a new copy of the
+        LOOP_FROM loop.
+        
 
     --------------
     | User usage |
@@ -783,6 +797,28 @@ def add_loop(loop_name, templates=None):
         else:
             os.mkdir(D)
 
+def copy_loop(loop_from, loop_to, templates=None):
+    # Check that the loop_from exists
+    if not os.path.isfile(f'src/{loop_from}.cxx'):
+        print(f'fatal: loop from file src/{loop_from}.cxx does not exist')
+        exit()
+
+    print(f'Warning: all instances of word "{loop_from}" will \n'
+           'be replaced in "{loop_to}" in files ./src/{loop_to} \n'
+           'and ./sub-slurm/{loop_to}, regardless of correctness.\n'
+           '-> Make sure "{loop_from}" is unique in these files.')
+
+    #FIXME
+    add_loop(loop_to)
+
+    # Now fix the existing files:
+    # sub-slurm/{loop_from.sh}
+    for file in ('src/NAME.cxx', 'sub-slurm/NAME.sh'):
+        txt = Path(file.replace('NAME',loop_from)).read_text()
+        txt.replace(loop_from,loop_to)
+        with open(file.replace('NAME',loop_to),'w') as f_out:
+            f_out.write(txt.replace(loop_from,loop_to))
+
 #   ---------------------------
 #   | program module: "setup" |
 #   ---------------------------
@@ -804,14 +840,9 @@ def setup(in_path, tree_name='events', max_nfiles=10):
     if not os.path.isdir(in_path):
         exit(f'fatal: input directory {in_path} not found')
 
-    # print("LION exit")
-    # exit()
-
     in_files = glob(f'{in_path}/*.root')
     if len(in_files) == 0:
         exit(f'fatal: no input *.root files in {in_path}')
-    # for f in in_files:
-    #     print(f)
 
     # make the class.h and class.C from root
     if not os.path.isfile('events.h'):
@@ -997,13 +1028,15 @@ def hadd(name=None):
 #-------------------------
 def parse_args():
     parser = argparse.ArgumentParser(
-            description="Required: run in one of 3 selected modes: [-s | -a | -d]")
+            description="Required: run in one of 4 selected modes: [-s | -a | -d | -c]")
     parser_mode = parser.add_mutually_exclusive_group()
     # one of three required modes
     parser_mode.add_argument('-s','--setup',  help='input path or file-containing-path; '
             ' uses TREE_NAME & N_FILES')
-    parser_mode.add_argument('-a','--add-loop', help='add a loop')
-    parser_mode.add_argument('-d','--hadd',     help='hadd an existing loop')
+    parser_mode.add_argument('-a','--add-loop',  help='add a loop')
+    parser_mode.add_argument('-d','--hadd',      help='hadd an existing loop')
+    parser_mode.add_argument('-c','--copy-loop', 
+    help='copy an existing loop; requires name from and name to', nargs=2)
 
     # individual arguments
     parser.add_argument('-t','--tree-name', 
@@ -1012,7 +1045,7 @@ def parse_args():
             help="Number of files per SLURM submission. Default:10", type=int, default=10)
     args = parser.parse_args()
 
-    if not (args.setup or args.add_loop or args.hadd):
+    if not (args.setup or args.add_loop or args.hadd or args.copy_loop):
         parser.print_help()
         exit()
 
@@ -1022,10 +1055,14 @@ def parse_args():
     
 if __name__ == "__main__":
     args = parse_args()
+    # print(args)
     if args.setup:
         setup(args.setup, args.tree_name, args.n_files)
     elif args.hadd:
         hadd(args.hadd)
     elif args.add_loop:
         add_loop(args.add_loop) 
+    elif args.copy_loop:
+        copy_loop(args.copy_loop[0], args.copy_loop[1]) 
+
     exit(0)
