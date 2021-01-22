@@ -121,7 +121,7 @@
     --------------
     | User usage |
     --------------
-        1. $ grace-loops.py --setup --path PATH
+        1. $ grace-loops.py --setup PATH
         2. edit _x.cxx -> src/test_loop.cxx
         3. $ sbatch sub-slurm/test_loop.sh
            generates files in out-data:
@@ -246,7 +246,7 @@ string MemTimeProgression::set_stats() {
     const char* pm_mem = (mem1>mem0) ? "+" : "-";
     stats = Form(" Finished %8lli calls | Time: %5.0f sec (+ %4.0f) | "
                  "Mem: %6.2f MB (%s%6.2f)",
-                  nCalls, time1, time1-time0, mem0/1000., pm_mem, (mem1-mem0)/1000.);
+                  nCalls, time1, time1-time0, mem1/1000., pm_mem, (mem1-mem0)/1000.);
     time0=time1;
     mem0=mem1;
     return stats;
@@ -703,10 +703,11 @@ def fix_double_branches(file_name):
             if name in name_set:
                 n_subs += 1
                 i = 0
-                name = f"{name}_{i}"
-                while name in name_set:
+                prop_name = f"{name}_{i}"
+                while prop_name in name_set:
                     i += 1
-                    name = f"{name}_{i}"
+                    prop_name = f"{name}_{i}"
+                name = prop_name
             collect_lines.append(f'{match.group(1)}{name}{match.group(3)}')
             name_set.add(name)    
         else:
