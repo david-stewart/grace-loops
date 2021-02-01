@@ -640,8 +640,9 @@ void $KEY_loop_name(events& dat, string _options) {
     string arg;
     // options >> arg;
     while (options >> arg) {
-        cout    << " Option " << n_options++ << ":  " << arg << endl;
-        dat.log << " Option " << n_options++ << ":  " << arg << endl;
+        cout    << " Option " << n_options << ":  " << arg << endl;
+        dat.log << " Option " << n_options << ":  " << arg << endl;
+        ++n_options;
     }
 
     // Histogram declarations here:
