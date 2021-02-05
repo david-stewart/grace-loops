@@ -430,7 +430,8 @@ $KEY_branches
 events::events(ofstream& _log, int _n_events, TString inp_file) :
     nevents{_n_events},
     log {_log}, 
-    stats {1000} 
+    stats {1000},
+    jentry {-1}
 {
     TChain* tree  = new TChain("$KEY_TreeName");
     if (inp_file.EndsWith(".root")) {
@@ -451,7 +452,6 @@ events::events(ofstream& _log, int _n_events, TString inp_file) :
     Init(tree);
     nentries = tree->GetEntries();
     if (nevents == -1) nevents = nentries;
-    jentry = 0;
 }
 events::~events()
 {
@@ -525,6 +525,7 @@ Int_t events::Cut(Long64_t entry)
 }
 
 bool events::next() {
+    jentry++;
     if (jentry >= nevents) {
         stats.set_get_stats();
         log  << " Final stats: " << stats.stats << endl; 
@@ -539,7 +540,6 @@ bool events::next() {
     }
     fChain->GetEntry(jentry);
     if (stats.call()) log << stats.stats << endl;
-    jentry++;
     return true;
 }
 '''),
