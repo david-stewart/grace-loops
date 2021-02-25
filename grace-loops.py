@@ -819,57 +819,11 @@ def copy_loop(loop_from, loop_to, templates=None):
 #   ---------------------------
 #   | program module: "setup" |
 #   ---------------------------
-def setup(in_path, tree_name='events', max_nfiles=10):
+def setup(in_path, tree_name='events', max_nfiles=10, array_files=-1):
     '''See notes at start of file'''
-
-    #------------------------------------------------
-    #| Find input *.root file and make events.{C.h} |
-    #------------------------------------------------
-    if not os.path.isdir(in_path) and os.path.isfile(in_path):
-        for lines in open(in_path,'r').readlines():
-            L = lines.strip()
-            if len(L) == 0 or L[0] == '#':
-                continue
-            print(f'Found input directory {L} in file {in_path}')
-            in_path = L
-            break
-        # see if in_path is a file that contains the path
-    if not os.path.isdir(in_path):
-        exit(f'fatal: input directory {in_path} not found')
-
-    in_files = glob(f'{in_path}/*.root')
-    if len(in_files) == 0:
-        exit(f'fatal: no input *.root files in {in_path}')
-
-    # make the class.h and class.C from root
-    if not os.path.isfile('events.h'):
-        _out = subprocess.Popen([f'''root -l -b {in_files[0]}<<EOF
-    {tree_name}->MakeClass("events")
-EOF
-    '''],shell=True, 
-                    stdout=subprocess.PIPE, 
-                    stderr=subprocess.STDOUT)
-
-        stdout,stderr = _out.communicate()
-        try:
-            stdout = stdout.decode('utf-8')
-            stderr = stderr.decode('utf-8')
-        except:
-            pass
-
-        for suffix in ('C','h'):
-            if not os.path.isfile(f'events.{suffix}'):
-                # print(f'fatal: file events.{suffix} not generated')
-                print(f'out msg:\n {stdout}')
-                print(f'err msg:\n {stderr}')
-
-        if not os.path.isfile('events.h'):
-            exit('fatal: events.h not generated in time for script.\n'
-                 ' please run script again.')
-
-    #----------------------------
-    #| Generate tree structure  |
-    #----------------------------
+    #---------------------------------
+    #| Generate file tree structure  |
+    #---------------------------------
     for D in ('sub-slurm',
               'out-slurm',
               'src',
@@ -882,6 +836,10 @@ EOF
     #------------------------------
     #| Write the input file lists |
     #------------------------------
+    in_files = glob(f'{in_path}/*.root')
+    if len(in_files) == 0:
+        exit(f'fatal: no input *.root files in {in_path}')
+
     file_cnt = 0
     entry_cnt = 0
     fout_all = open(f'in-lists/list_all.list','w')
@@ -895,6 +853,79 @@ EOF
         if entry_cnt == max_nfiles:
             entry_cnt = 0
     fout_all.close()
+
+    if not os.path.isdir(in_path) and os.path.isfile(in_path):
+        for lines in open(in_path,'r').readlines():
+            L = lines.strip()
+            if len(L) == 0 or L[0] == '#':
+                continue
+            print(f'Found input directory {L} in file {in_path}')
+            in_path = L
+            break
+        # see if in_path is a file that contains the path
+    if not os.path.isdir(in_path):
+        exit(f'fatal: input directory {in_path} not found')
+
+    #------------------------------------------------
+    #| Make events.{C.h} |
+    #------------------------------------------------
+    if array_files == -1 :
+        print(' Using TChain->MakeClass(events) to make file structure reading \n',
+             f' all {len(in_files)} input files. Array sizes will match maximum size\n',
+              ' of any file.\n\n',
+              ' If this takes too long (from many input files), rerun with --n-array-files #\n',
+              ' The program will find the array maximums from only this number files, and then\n',
+              ' pick a conservatively larger value. Still, be careful of seg faults if these\n',
+              ' are not large enough.')
+    else:        
+        print(' Using TChain->MakeClass(events) to make file structure reading \n',
+             f' first {array_files} input files. The program will find the array \n',
+              ' the maximums from only these files, and then pick a conservatively \n',
+              ' larger value. Still, be careful of seg faults if these\n',
+              ' are not large enough.')
+
+    # make the class.h and class.C from root
+    if not os.path.isfile('events.h'):
+        _out = subprocess.Popen([f'''
+root -l -b <<EOF
+    TChain *chain = new TChain("{tree_name}");
+    ifstream fin;
+    fin.open("in-lists/list_all.list");
+    string file_path;
+    int n_files = 0;
+    int to_read = {array_files};
+    while (fin >> file_path) {{
+        chain->Add(file_path.c_str());
+        if ( to_read != -1 && n_files >= to_read) break;
+        ++n_files;
+    }}
+    chain->MakeClass("events")
+EOF
+    '''],shell=True, 
+                    stdout=subprocess.PIPE, 
+                    stderr=subprocess.STDOUT)
+
+        stdout,stderr = _out.communicate()
+        try:
+            stdout = stdout.decode('utf-8')
+            stderr = stderr.decode('utf-8')
+        except:
+            pass
+        print('\n\n--begin: ROOT messages from MakeClass("events")--')
+        print(stdout)
+        print('--end: ROOT messages from MakeClass("events")--\n\n')
+
+        for suffix in ('C','h'):
+            if not os.path.isfile(f'events.{suffix}'):
+                # print(f'fatal: file events.{suffix} not generated')
+                print(f'out msg:\n {stdout}')
+                print(f'err msg:\n {stderr}')
+
+        if not os.path.isfile('events.h'):
+            exit('fatal: events.h not generated in time for script.\n'
+                 ' please run script again.')
+
+
     
     #------------------------------------------------
     #| Get the required code snippets from events.h |
@@ -907,17 +938,19 @@ EOF
     static_constexpr = re.compile('(   static constexpr Int_t \w+ = )(\d*);')
     KEY_constexpr = []
     first = True
+    mult_up = (array_files != -1)
     for x in static_constexpr.findall(text):
-        if first:
+        if first and mult_up:
             first = False
             print('Finding max values for arrays and setting them to 4x(max(max_val, 20))')
         val = int(x[1])
-        val0 = val
-        if val < 20:
-            val = 20
-        val *= 4
+        if mult_up:
+            val0 = val
+            if val < 20:
+                val = 20
+            val *= 4
+            print(f'{x[0]}   {val0} -> {val}')
         KEY_constexpr.append(f"{x[0]}{val};")
-        print(f'{x[0]}   {val0} -> {val}')
     code_snippets['KEY_constexpr'] = "// Fixed size dimensions of " +\
             "array or collections " +\
             "stored in the TTree if any.\n"+"\n".join(KEY_constexpr)
@@ -1035,6 +1068,8 @@ def parse_args():
             help='Name of TTree in ROOT files. Default:"events"', type=str, default="events")
     parser.add_argument('-n','--n-files',   
             help="Number of files per SLURM submission. Default:10", type=int, default=10)
+    parser.add_argument('--n-array-files',   
+            help="Number of files read to TChain for finding max array sizes. Default:all", type=int, default=-1)
     args = parser.parse_args()
 
     if not (args.setup or args.add_loop or args.hadd or args.copy_loop):
@@ -1049,7 +1084,7 @@ if __name__ == "__main__":
     args = parse_args()
     # print(args)
     if args.setup:
-        setup(args.setup, args.tree_name, args.n_files)
+        setup(args.setup, args.tree_name, args.n_files,args.n_array_files)
     elif args.hadd:
         hadd(args.hadd)
     elif args.add_loop:
