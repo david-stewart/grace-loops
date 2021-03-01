@@ -388,11 +388,17 @@ public :
    ofstream &log;
    MemTimeProgression stats;
 
+//:TAG START:  Array Sizes
 $KEY_constexpr
+//:TAG END: Array Sizes
 
+//:TAG START: Leaf Types
 $KEY_leaf_types
+//:TAG END: Leaf Types
 
+//:TAG START: Declare Branches
 $KEY_branches
+//:TAG END: Declare Branches
 
    events(ofstream& log, int n_events, TString inlist);
    virtual ~events();
@@ -492,9 +498,11 @@ void events::Init(TTree *tree)
    if (!tree) return;
    fChain = tree;
    fCurrent = -1;
+   //:TAG START: Set Branches
    fChain->SetMakeClass(1);
 
 $KEY_SetBranchAddress
+   //:TAG END: Set Branches
    Notify();
 }
 
@@ -542,6 +550,10 @@ bool events::next() {
     if (stats.call()) log << stats.stats << endl;
     return true;
 }
+
+//:TAG START: Coda Functions
+//:TAG END: Coda Functions
+
 '''),
 
 'loop.sh': Template( # keys:
