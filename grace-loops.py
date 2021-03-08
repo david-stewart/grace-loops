@@ -753,8 +753,10 @@ def add_loop(loop_name, templates=None):
         templates = gen_dict()
 
     keys = {'KEY_loop_name' : loop_name }
-    keys['KEY_n_lists'] = len(glob('in-lists/*.list'))-1
-    # templates['KEY_loop_name'] = loop_name 
+    imax_list = -1;
+    while os.path.isfile(f'in-lists/list_{imax_list+1}.list'):
+        imax_list += 1
+    keys['KEY_n_lists'] = imax_list
     
     with open(f'sub-slurm/{loop_name}.sh','w') as fout:
         fout.write(templates['loop.sh'].substitute(**keys))
@@ -836,6 +838,9 @@ def setup(in_path, tree_name='events', max_nfiles=10, array_files=-1):
     #---------------------------------
     #| Generate file tree structure  |
     #---------------------------------
+    with open("in-path",'w') as fout:
+        fout.write(f'# setup with input path:\n{in_path}')
+
     for D in ('sub-slurm',
               'out-slurm',
               'src',
@@ -1031,7 +1036,7 @@ EOF
     if nsubs > 0:
         fix_double_branches('src/events.cxx')
 
-def hadd(name=None):
+def hadd(name=None, o_tag=None):
     if not name:
         text = Path('Makefile').read_text()
         last_dot_o = text.rfind('.o')
@@ -1041,6 +1046,9 @@ def hadd(name=None):
     else:
         print(f'Running hadd in output "out-data/{name}/"')
 
+    if o_tag:
+        o_tag = '_'+o_tag
+
     hadd_files = glob(f'out-data/{name}/out-files/*.root')        
     if not (hadd_files):
         print (f'fatal: no out-data/{name}/out-files/*.root files to hadd')
@@ -1049,7 +1057,7 @@ def hadd(name=None):
     if os.path.isfile(f'out-data/{name}/hadd.root'):
         print(f'warning: writing over out-data/{name}/hadd.root')
 
-    _out = subprocess.Popen(f'hadd -fk out-data/{name}/hadd.root {" ".join(hadd_files)}',shell=True)
+    _out = subprocess.Popen(f'hadd -fk out-data/{name}/hadd{o_tag}.root {" ".join(hadd_files)}',shell=True)
     stdout,stderr = _out.communicate()
     try:
         stdout = stdout.decode('utf-8')
@@ -1080,17 +1088,33 @@ def parse_args():
             help='Name of TTree in ROOT files. Default:"events"', type=str, default="events")
     parser.add_argument('-n','--n-files',   
             help="Number of files per SLURM submission. Default:10", type=int, default=10)
+    parser.add_argument('--tag',            help='tag name for hadd')
     parser.add_argument('--n-array-files',   
             help="Number of files read to TChain for finding max array sizes. Default:all", type=int, default=-1)
+    parser.add_argument('-p','--print-path', help='output for copy-paste; if want all use "."')
     args = parser.parse_args()
 
-    if not (args.setup or args.add_loop or args.hadd or args.copy_loop):
+    if not (args.setup or args.add_loop or args.hadd or args.copy_loop or args.print_path):
         parser.print_help()
         exit()
 
     # print(args)
     return args
 
+def print_path(which=""):
+    # print(f'which: {which}')
+    pwd = os.getcwd()
+    if which == ".":
+        print('All output *.hadd files:')
+        for ofile in glob(f"{pwd}/out-data/*/hadd*.root"):
+            print('  ',ofile)
+    else:
+        ofile = f'{pwd}/out-data/{which}/hadd.root'
+        if not os.path.isfile(f'ofile'):
+            print(f'warning: file {ofile} is not present')
+            print_path('.')
+        else:
+            print('ofile')
     
 if __name__ == "__main__":
     args = parse_args()
@@ -1098,10 +1122,14 @@ if __name__ == "__main__":
     if args.setup:
         setup(args.setup, args.tree_name, args.n_files,args.n_array_files)
     elif args.hadd:
-        hadd(args.hadd)
+        # print('system args: ', args.hadd, '  next: ', args.tag)
+        # exit('done')
+        hadd(args.hadd, args.tag)
     elif args.add_loop:
         add_loop(args.add_loop) 
     elif args.copy_loop:
         copy_loop(args.copy_loop[0], args.copy_loop[1]) 
+    elif args.print_path:
+        print_path(args.print_path)
 
     exit(0)

@@ -155,12 +155,12 @@ EOF
     req_headers = set()
     # print(h_files, n_missing)
     for h_file in h_files:
-        # print(h_file)
+        print(h_file)
         text = Path(h_file).read_text()
         for K,V in missing_classes.items():
             if not V:
                 continue
-            if re.search('ClassDef\w*\\(\w*'+K,text):
+            if re.search('ClassDef\s*\\(\w*'+K,text):
                 missing_classes[K] = False
                 n_missing -= 1
                 req_headers.add(h_file.split('/')[-1])
@@ -480,14 +480,13 @@ bool events::next_{status}() {{
 }};
 {_class}* events::get_{status}(int i) {{
     if (i==-1) return ({_class}*) tca_{status}->UncheckedAt(index_{status});
-    cout << " " << i << " ";
     return ({_class}*) tca_{status}->At(i);
 }};
 '''
     set_tag_value('./src/events.cxx','Coda Functions',text) 
 # swap_trees('alt')
 import shutil
-shutil.copyfile('../pure/src/events.h','src/events.h')
-shutil.copyfile('../pure/src/events.cxx','src/events.cxx')
+# shutil.copyfile('../pure/src/events.h','src/events.h')
+# shutil.copyfile('../pure/src/events.cxx','src/events.cxx')
 
 re_leaf_wTObjects('./','${HOME}/AN_common/include/TreeObj.h')
