@@ -1057,7 +1057,7 @@ def hadd(name=None, o_tag=None):
     if os.path.isfile(f'out-data/{name}/hadd.root'):
         print(f'warning: writing over out-data/{name}/hadd.root')
 
-    _out = subprocess.Popen(f'hadd -fk out-data/{name}/hadd{o_tag}.root {" ".join(hadd_files)}',shell=True)
+    _out = subprocess.Popen(f'hadd -fkT out-data/{name}/hadd{o_tag}.root {" ".join(hadd_files)}',shell=True)
     stdout,stderr = _out.communicate()
     try:
         stdout = stdout.decode('utf-8')
