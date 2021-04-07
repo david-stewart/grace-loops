@@ -21,7 +21,7 @@
 
        Uses options with defaults:
            --tree-name  (default: 'events') TTree name in ROOT files
-           --n-files    (default: 10)       number of ROOT files per SLURM submission
+           --n-files    (default: 10)       number of jobs per SLURM submission
 
        PATH may either be a directory containing the ROOT files, or a file containing that path
 
@@ -146,6 +146,28 @@ from sys import argv
 from glob import glob
 from pathlib import Path
 import re
+import datetime
+
+class file_times:
+    def __init__(self, glob_string):
+        # print(f'glob_string {glob_string}')
+        self.youngest_time = -1
+        self.files = []
+        # self.times = []
+        for F in glob(glob_string):
+            # print(F)
+            time = os.stat(F).st_mtime
+            # print(time)
+            # self.times.append(time)
+            self.files.append((time,F))
+            if time > self.youngest_time:
+                self.youngest_time = time
+        self.nfiles = len(self.files)
+        self.files.sort(reverse=True)
+        # print(self.nfiles, self.youngest_time)
+    def fmt(time_f):
+        time = datetime.datetime.fromtimestamp(time_f)
+        return f'{time.year}-{"%02i"%time.month}-{"%02i"%time.day} {"%02i"%time.hour}:{"%02i"%time.minute}:{"%02i"%time.second}'
 
 def gen_dict():
     ''' Make the input dictionary used in generating the input files '''
@@ -760,6 +782,9 @@ def add_loop(loop_name, templates=None):
     
     with open(f'sub-slurm/{loop_name}.sh','w') as fout:
         fout.write(templates['loop.sh'].substitute(**keys))
+    os.symlink(f'sub-slurm/{loop_name}.sh',f'{loop_name}.sh')
+
+    
 
     # modify src/events.h in place
     text = Path('src/events.h').read_text()
@@ -838,6 +863,10 @@ def setup(in_path, tree_name='events', max_nfiles=10, array_files=-1):
     #---------------------------------
     #| Generate file tree structure  |
     #---------------------------------
+    if os.path.isdir("src"):
+        print("Directory \"src\" is already present. Terminating grace_loops.py setup")
+        exit()
+
     with open("in-path",'w') as fout:
         fout.write(f'# setup with input path:\n{in_path}')
 
@@ -845,7 +874,8 @@ def setup(in_path, tree_name='events', max_nfiles=10, array_files=-1):
               'out-slurm',
               'src',
               'in-lists',
-              'bin','obj',
+              'bin',
+              'obj',
               'out-data'):
         if not os.path.isdir(D):
             os.mkdir(D)
@@ -853,24 +883,10 @@ def setup(in_path, tree_name='events', max_nfiles=10, array_files=-1):
     #------------------------------
     #| Write the input file lists |
     #------------------------------
-    in_files = glob(f'{in_path}/*.root')
-    if len(in_files) == 0:
-        exit(f'fatal: no input *.root files in {in_path}')
 
-    file_cnt = 0
-    entry_cnt = 0
-    fout_all = open(f'in-lists/list_all.list','w')
-    for name_file in in_files:
-        if (entry_cnt == 0):
-            fout = open(f'in-lists/list_{file_cnt}.list','w')
-            file_cnt += 1
-        fout.write(f'{name_file}\n')
-        fout_all.write(f'{name_file}\n')
-        entry_cnt += 1
-        if entry_cnt == max_nfiles:
-            entry_cnt = 0
-    fout_all.close()
-
+    # set max_nfiles to be either:
+    #   the number of input files
+    #   the input files in a list
     if not os.path.isdir(in_path) and os.path.isfile(in_path):
         for lines in open(in_path,'r').readlines():
             L = lines.strip()
@@ -882,6 +898,53 @@ def setup(in_path, tree_name='events', max_nfiles=10, array_files=-1):
         # see if in_path is a file that contains the path
     if not os.path.isdir(in_path):
         exit(f'fatal: input directory {in_path} not found')
+
+    in_files = glob(f'{in_path}/*.root')
+    with open ('in-lists/list_all.list','w') as f_out:
+        for f in in_files:
+            f_out.write(f'{f}\n')
+
+    n_lists    = 0
+    n_per_file = 0
+    n_plus_one = 0
+
+    n_files = len(in_files)
+    if max_nfiles >= n_files:
+        n_lists = n_files
+        n_per_file = 1
+    else:
+        n_lists = max_nfiles
+        n_per_file = n_files//max_nfiles
+        n_plus_one = n_files%max_nfiles
+
+    index = 0
+    for i_list in range(n_lists):
+        with open(f'in-lists/list_{i_list}.list','w') as fout:
+            n = n_per_file
+            if i_list < n_plus_one:
+                n += 1
+            for i in range(index, index+n):
+                fout.write(f'{in_files[i]}\n')
+            index += n
+        
+
+    # if len(in_files) == 0:
+    #     exit(f'fatal: no input *.root files in {in_path}')
+
+    # file_cnt = 0
+    # entry_cnt = 0
+    # fout_all = open(f'in-lists/list_all.list','w')
+    # for name_file in in_files:
+    #     if (entry_cnt == 0):
+    #         fout = open(f'in-lists/list_{file_cnt}.list','w')
+    #         file_cnt += 1
+    #     fout.write(f'{name_file}\n')
+    #     fout_all.write(f'{name_file}\n')
+    #     entry_cnt += 1
+    #     if entry_cnt == max_nfiles:
+    #         entry_cnt = 0
+    # fout_all.close()
+
 
     #------------------------------------------------
     #| Make events.{C.h} |
@@ -1048,14 +1111,17 @@ def hadd(name=None, o_tag=None):
 
     if o_tag:
         o_tag = '_'+o_tag
+    else:
+       o_tag = '' 
 
     hadd_files = glob(f'out-data/{name}/out-files/*.root')        
     if not (hadd_files):
         print (f'fatal: no out-data/{name}/out-files/*.root files to hadd')
         exit(1)
 
-    if os.path.isfile(f'out-data/{name}/hadd.root'):
-        print(f'warning: writing over out-data/{name}/hadd.root')
+
+    if os.path.isfile(f'out-data/{name}/hadd{o_tag}.root'):
+        print(f'warning: writing over out-data/{name}/hadd{o_tag}.root')
 
     _out = subprocess.Popen(f'hadd -fkT out-data/{name}/hadd{o_tag}.root {" ".join(hadd_files)}',shell=True)
     stdout,stderr = _out.communicate()
@@ -1067,6 +1133,28 @@ def hadd(name=None, o_tag=None):
         print(f'err msg:\n {stderr}')
     except:
         pass
+
+    tree_obj = []
+    try:
+        _out = subprocess.Popen(f'''root -l {hadd_files[0]}<<EOF  > __temp_types
+.ls
+EOF
+''', shell=True)
+        for line in open('__temp_types','r').readlines():
+            if 'KEY: TTree' in line:
+                tree_obj.append(line.split(';')[0].split()[-1])
+    except:
+        pass 
+#-------------------------------
+    for tree in tree_obj:
+        _out = subprocess.Popen(
+            f'rootcp {hadd_files[0]}:{tree} out-data/{name}/hadd{o_tag}.root',shell=True);
+    # except:
+        # pass
+
+    print('suggested:')
+    print(f'scp grace:{os.getcwd()}/out-data/{name}/hadd{o_tag}.root .') 
+
 
 #-------------------------
 #| start main program    |
@@ -1087,10 +1175,10 @@ def parse_args():
     parser.add_argument('-t','--tree-name', 
             help='Name of TTree in ROOT files. Default:"events"', type=str, default="events")
     parser.add_argument('-n','--n-files',   
-            help="Number of files per SLURM submission. Default:10", type=int, default=10)
+            help="Divide slurm submissions into this many jobs. Default:10", type=int, default=10)
     parser.add_argument('--tag',            help='tag name for hadd')
     parser.add_argument('--n-array-files',   
-            help="Number of files read to TChain for finding max array sizes. Default:all", type=int, default=-1)
+            help="Number of files read to TChain for finding max array sizes. Default:20. Use -1 for all", type=int, default=15)
     parser.add_argument('-p','--print-path', help='output for copy-paste; if want all use "."')
     args = parser.parse_args()
 
@@ -1102,20 +1190,81 @@ def parse_args():
     return args
 
 def print_path(which=""):
-    # print(f'which: {which}')
-    pwd = os.getcwd()
-    if which == ".":
-        print('All output *.hadd files:')
-        for ofile in glob(f"{pwd}/out-data/*/hadd*.root"):
-            print('  ',ofile)
+    if which[0] == '+':
+        by_time = False
+        which = which[1:]
     else:
+        by_time = True
+        
+
+    pwd = os.getcwd()
+
+    if not which == '.':
         ofile = f'{pwd}/out-data/{which}/hadd.root'
         if not os.path.isfile(f'ofile'):
             print(f'warning: file {ofile} is not present')
             print_path('.')
         else:
             print('ofile')
-    
+        return
+
+    if not by_time:
+        for ofile in glob(f"{pwd}/out-data/*/hadd*.root"):
+            print('  ',ofile)
+        return
+
+    # make a sorted time list of all out-data files
+    data = dict()
+    for D in glob(f"{pwd}/out-data/*"):
+        if os.path.isdir(D):
+            _hadd_data = file_times(f'{D}/*.root')
+            _root_data = file_times(f'{D}/out-files/*.root')
+            if _hadd_data.nfiles and _root_data.nfiles:
+                time = min(_hadd_data.youngest_time, _root_data.youngest_time)
+                data[(time,D)] = (_hadd_data, _root_data)
+            elif _hadd_data.nfiles:
+                time = _hadd_data.youngest_time
+                data[(time,D)] = (_hadd_data, None)
+            elif _root_data.nfiles:
+                time = _root_data.youngest_time
+                data[(time,D)] = (None, _root_data)
+    for key in sorted(data,reverse=True):
+        E = data[key]
+        if E[0] and E[1]:
+            print( f'{file_times.fmt(E[1].youngest_time)}  |{E[1].files[0][1].split("/")[-3]}|  : {E[1].nfiles} input *.root files')
+            for F in E[0].files:
+                time = F[0]
+                name = F[1]
+                lead = "  !->" if time<E[1].youngest_time else "   ->"
+                print( f'{lead} {file_times.fmt(time)} {name}')
+        elif E[0]:
+            print( f'{file_times.fmt(E[0].youngest_time)}  |{E[0].files[0][1].split("/")[-2]}|  : 0 *.root files')
+            # print( f'{file_times.fmt(E[0].youngest_time)}  {os.path.dirname(E[0].files[0][1])}/<no-files>.root')
+            for F in E[0].files:
+                print( f'   -> {file_times.fmt(F[0])} {F[1]}')
+        elif E[1]:
+            print( f'{file_times.fmt(E[1].youngest_time)}  |{E[1].files[0][1].split("/")[-3]}|  : {E[1].nfiles} *.root files')
+        # print(key[1])
+    # print out the output
+
+    # else:
+    #     index = dict()
+    #     index_y_file = dict()
+    #     for ofile in o_files:
+    #         time = os.stat(ofile).st_mtime
+    #         # get the oldest sub-file, too
+    #         youngest_file = -1.
+    #         for F in glob(f'{os.path.dirname(ofile)}/*.root'):
+    #             if youngest_file < os.stat(F).st_mtime:
+    #                 youngest_file = os.stat(F).st_mtime
+    #         index_y_file[youngest_file] = 
+    #         index[os.stat(ofile).st_mtime] = ofile
+    #     K = sorted(index.keys(),reverse=True)
+    #     for k in K:
+    #         time = datetime.datetime.fromtimestamp(k)
+    #         print (f'{time.year}-{time.month}-{time.day} {time.hour}:{time.minute}:{"%02i"%time.second} : {index[k]}')
+    #         # print (datetime.datetime.fromtimestamp(k))
+    #         # print(k)
 if __name__ == "__main__":
     args = parse_args()
     # print(args)
@@ -1131,5 +1280,4 @@ if __name__ == "__main__":
         copy_loop(args.copy_loop[0], args.copy_loop[1]) 
     elif args.print_path:
         print_path(args.print_path)
-
     exit(0)

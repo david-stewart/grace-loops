@@ -8,11 +8,14 @@ import re
 
 ''' To do:
     Add iterator for each TClonesArray object of given <name> and <class>
-        int  cnt_<name>;    // how many there are in the TClonesArray for given event
-        int  index_<name>;  // current index in TClonesArray
-        <class>* <name>;    // pointer to index_<name> instance
-        bool next_<name>(); // loops through index_<name>, setting <class>* name as it goes
-        int  get_cnt_<name>(); // get how many there are
+ [x]      int  cnt_<name>;    // how many there are in the TClonesArray for given event
+ [x]      int  index_<name>;  // current index in TClonesArray
+ [x]      <class>* <name>;    // pointer to index_<name> instance
+ [x]      bool next_<name>(); // loops through index_<name>, setting <class>* name as it goes
+ [x]      bool reset_<name>(); // resets the iterator for the class
+ [x]      int  get_cnt_<name>(); // get how many there are
+
+ [ ]      Add a class to events to match and read is###### triggers.
 '''
 
 def tag_value(f_name, tag):
@@ -214,7 +217,7 @@ EOF
     # print(len(leaf_types), len(branch_names), len(set_branches))
 
     if not len(leaf_types) == len(branch_names):
-        print('fatal error: len(leaf_types) != len(branch_names)')
+        print('msg.01 fatal error: len(leaf_types) != len(branch_names)')
         print(' leaf types:')
         for x in leaf_types:
             print(x)
@@ -224,7 +227,7 @@ EOF
         exit(2)
 
     if not len(leaf_types) == len(set_branches):
-        print('fatal error: len(leaf_types) != len(set_branches)')
+        print('msg.02 fatal error: len(leaf_types) != len(set_branches)')
         print(' leaf types:')
         for x in leaf_types:
             print(x)
@@ -396,10 +399,10 @@ EOF
                 f_out.write(f'    //--accessor and pseudo-iterator for TClonesArray* (tca) {status}\n')
                 f_out.write(f'    %-19s *tca_{status} {{new TClonesArray("{_class}")}};\n'%'TClonesArray')
                 f_out.write(f'    %-19s range_{status}{{ 0}};\n'%'int');
-                f_out.write(f'    %-19s index_{status}{{-2}};\n'%'int');
                 f_out.write(f'    %-19s *{status} {{nullptr}};\n'%_class);
                 f_out.write(f'    %-19s *get_{status}(int=-1);\n'%_class);
                 f_out.write(f'    %-19s next_{status}();\n'%'bool');
+                f_out.write(f'    %-19s reset_{status}();\n'%'void');
                 f_out.write(f'    %-19s size_{status}() {{return tca_{status}->GetEntriesFast();}};\n'%'int');
                 f_out.write(f'    //--end {status} psuedo-iterator\n')
             elif status in classes:
@@ -470,13 +473,16 @@ bool events::next_{status}() {{
     }}
     ++index_{status};
     if (index_{status} >= range_{status}) {{
-        {status} = nullptr;
-        index_{status} = -2;
+        reset_{status}();
         return false;
     }} else {{
         {status} = ({_class}*) tca_{status}->UncheckedAt(index_{status});
         return true;
     }}
+}};
+void events::reset_{status}() {{
+    {status} = nullptr;
+    index_{status} = -2;
 }};
 {_class}* events::get_{status}(int i) {{
     if (i==-1) return ({_class}*) tca_{status}->UncheckedAt(index_{status});
