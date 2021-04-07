@@ -399,6 +399,7 @@ EOF
                 f_out.write(f'    //--accessor and pseudo-iterator for TClonesArray* (tca) {status}\n')
                 f_out.write(f'    %-19s *tca_{status} {{new TClonesArray("{_class}")}};\n'%'TClonesArray')
                 f_out.write(f'    %-19s range_{status}{{ 0}};\n'%'int');
+                f_out.write(f'    %-19s index_{status};\n'%'int');
                 f_out.write(f'    %-19s *{status} {{nullptr}};\n'%_class);
                 f_out.write(f'    %-19s *get_{status}(int=-1);\n'%_class);
                 f_out.write(f'    %-19s next_{status}();\n'%'bool');

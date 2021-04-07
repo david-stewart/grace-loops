@@ -620,7 +620,7 @@ int main(int nargs, char** argv) {
      */
 
     int n_events          {  (nargs>1) ? atoi(argv[1]) : 100 };
-    string inp_list       {  (nargs>2) ? argv[2] : "in-lists/list_all.list" };
+    string inp_list       {  (nargs>2) ? argv[2] : "in-lists/list_test.list" };
     string which_loop     {  (nargs>3) ? argv[3] : "test_loop" };
     string o_name_tag     {  (nargs>4) ? argv[4] : "test_loop" };
 
@@ -855,6 +855,63 @@ def copy_loop(loop_from, loop_to, templates=None):
         with open(file.replace('NAME',loop_to),'w') as f_out:
             f_out.write(txt.replace(loop_from,loop_to))
 
+#----------------------------------------------------------------
+# A short function to add a "has_trigger(int)" function to events
+#----------------------------------------------------------------
+def add_trigger_fnc():
+    '''Add a trigger map function into src/events.h and initialize it as required in src/events.h
+       Assume that the two files already exist'''
+    if not (os.path.isfile('src/events.cxx') and os.path.isfile('src/events.h')):
+        print('Cannot run add_trigger_fnc() because missing src/events.cxx or src/events.h')
+        exit('fatal error')
+
+    # collect all the triggers
+    # re_trig = re.compile(r'n\s+Bool_t\s+is([0-9]+)\s*;\*\n')
+    triggers = []
+    re_trig = re.compile(r'\s+Bool_t\s+is([0-9]+)\s*;.*')
+    for line in open('src/events.h','r').readlines():
+        # print(line)
+        match = re_trig.match(line)
+        if match:
+            triggers.append(match.group(1))
+
+    # add required text in src/events.h
+    text = Path('src/events.h').read_text()
+    # parts = re.search(f'(.*\s+is{triggers[-1]}\s*;\s*\n)(.*)',text,re.DOTALL)
+    parts = re.search(f'(.*:TAG END: Declare Branches\s*\n)(.*)',text,re.DOTALL)
+    with open('src/events.h','w') as f_out:
+        f_out.write(parts.group(1))
+        f_out.write('''   map<int,bool*>      trigger_map;
+   bool                has_trigger(int);
+   bool                has_trigger_all(vector<int>);
+   bool                has_trigger_any(vector<int>);
+
+''')
+        f_out.write(parts.group(2))
+
+    # add required text in src/events.cxx
+    text = Path('src/events.cxx').read_text()
+    parts = re.search('(.*Init\(tree\);\s*\n)(.*)',text,re.DOTALL)
+    with open('src/events.cxx','w') as f_out:
+        f_out.write(parts.group(1))
+        f_out.write('\n    //Set the trigger map\n')
+        for x in triggers:
+            f_out.write(f'    trigger_map[{x}] = &is{x};\n')
+        f_out.write('\n')
+        f_out.write(parts.group(2)) 
+        f_out.write('''
+// warning, below function will seg-fault if trigger is not in map
+bool  events::has_trigger(int i_trig) { return *(trigger_map[i_trig]); };
+bool  events::has_trigger_all(vector<int> triggers) { 
+    for (auto T : triggers)  if (! *(trigger_map[T])) return false;
+    return true;
+};
+bool  events::has_trigger_any(vector<int> triggers) { 
+    for (auto T : triggers)  if (*(trigger_map[T])) return true;
+    return false;
+};
+''')
+
 #   ---------------------------
 #   | program module: "setup" |
 #   ---------------------------
@@ -903,6 +960,12 @@ def setup(in_path, tree_name='events', max_nfiles=10, array_files=-1):
     with open ('in-lists/list_all.list','w') as f_out:
         for f in in_files:
             f_out.write(f'{f}\n')
+
+    # make a test lists            
+    with open ('in-lists/list_test.list','w') as f_out:
+        n_space = len(in_files) // 10
+        for i in range(10):
+            f_out.write(f'{in_files[i*n_space]}\n')
 
     n_lists    = 0
     n_per_file = 0
@@ -1098,6 +1161,7 @@ EOF
     nsubs = fix_double_branches('src/events.h')
     if nsubs > 0:
         fix_double_branches('src/events.cxx')
+    add_trigger_fnc()
 
 def hadd(name=None, o_tag=None):
     if not name:
