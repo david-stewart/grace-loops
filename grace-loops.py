@@ -1,4 +1,4 @@
-#!/gpfs/loomis/apps/avx/software/Python/3.6.4-foss-2018a/bin/python3
+#!/gpfs/loomis/apps/avx/software/Python/3.8.6-GCCcore-10.2.0/bin/python3
 
 '''
     This script setups directory to write loops to run over various local trees,
@@ -268,7 +268,7 @@ string MemTimeProgression::set_stats() {
     const char* pm_mem = (mem1>mem0) ? "+" : "-";
     stats = Form(" Finished %8lli calls | Time: %5.0f sec (+ %4.0f) | "
                  "Mem: %6.2f MB (%s%6.2f)",
-                  nCalls, time1, time1-time0, mem1/1000., pm_mem, (mem1-mem0)/1000.);
+                  nCalls, time1, time1-time0, mem1/1000., pm_mem, fabs(mem1-mem0)/1000.);
     time0=time1;
     mem0=mem1;
     return stats;
@@ -704,7 +704,7 @@ void $KEY_loop_name(events& dat, string _options) {
 
 def fix_double_branches(file_name):
     '''Under the certain conditions, ROOT's TTree->MakeClass("name") will
-       make multiple TBranchs of the same name. This is cause c++ to not 
+       make multiple TBranchs of the same name. This causes c++ to not 
        compile the code as desired.
 
        Input:
@@ -925,7 +925,7 @@ def setup(in_path, tree_name='events', max_nfiles=10, array_files=-1):
         exit()
 
     with open("in-path",'w') as fout:
-        fout.write(f'# setup with input path:\n{in_path}')
+        fout.write(f'# setup with input path:\n{in_path}\n')
 
     for D in ('sub-slurm',
               'out-slurm',

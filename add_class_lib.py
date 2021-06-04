@@ -398,7 +398,7 @@ EOF
                 _class = best_matches_clones[status][0][0]
                 f_out.write(f'    //--accessor and pseudo-iterator for TClonesArray* (tca) {status}\n')
                 f_out.write(f'    %-19s *tca_{status} {{new TClonesArray("{_class}")}};\n'%'TClonesArray')
-                f_out.write(f'    %-19s range_{status}{{ 0}};\n'%'int');
+                f_out.write(f'    %-19s _size_{status}{{ 0}};\n'%'int');
                 f_out.write(f'    %-19s index_{status};\n'%'int');
                 f_out.write(f'    %-19s *{status} {{nullptr}};\n'%_class);
                 f_out.write(f'    %-19s *get_{status}(int=-1);\n'%_class);
@@ -469,11 +469,11 @@ EOF
 // Two  psuedo-iterator functions for TClonesArray({_class}) *tca_{status}
 bool events::next_{status}() {{
     if (index_{status} == -2) {{ // initialize for the first time in a given event
-        range_{status} = size_{status}()-1;
+        _size_{status} = size_{status}();
         index_{status} = -1;
     }}
     ++index_{status};
-    if (index_{status} >= range_{status}) {{
+    if (index_{status} >= _size_{status}) {{
         reset_{status}();
         return false;
     }} else {{
