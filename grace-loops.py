@@ -175,20 +175,14 @@ def gen_dict():
 
 'Makefile' : 
 r'''
-# The libraries for pythia, fastjet, and root ( "LIB_TRI" )
-# ccflg=-I${PYTHIA8}/include `${FASTJET3}/fastjet-config --cxxflags` `root-config --cflags`
-# ldflg=-L${PYTHIA8}/lib -lpythia8 `${FASTJET3}/fastjet-config --libs` `root-config --glibs`
- 
-# ccflg= `root-config --cflags`
-ccflg=`${FASTJET3}/fastjet-config --cxxflags` `root-config --cflags`
-# ldflg= `root-config --glibs`
-ldflg=`${FASTJET3}/fastjet-config --libs` `root-config --glibs`
+AN_setter=${HOME}/AN_common/AN-common-config
+io_setter=${HOME}/root_macros/io_lib/iolib-config
+ccflg=`${FASTJET3}/fastjet-config --cxxflags` `root-config --cflags` `${io_setter} -I` `${AN_setter} -I`  -I${ROOUNFOLD}/src
+ldflg=`${FASTJET3}/fastjet-config --libs` `root-config --glibs` `${io_setter} -L` `${AN_setter} -L`  -L${ROOUNFOLD} -lRooUnfold
 
-# LIB_PYTH=-I${PYTHIA8}/include -L${PYTHIA8}/lib -lpythia8
 LIB_FASTJET=`${FASTJET3}/fastjet-config --cxxflags --libs`
 LIB_ROOT=`root-config --cflags --glibs`
-LIB_DUO= ${LIB_ROOT} ${LIB_FASTJET}
-# LIB_TRI=${LIB_PYTH} ${LIB_FASTJET} ${LIB_ROOT}
+LIB_TRI= ${LIB_ROOT} ${LIB_FASTJET} `${io_setter} -L` `${AN_setter} -L` -L${ROOUNFOLD} -lRooUnfold
 
 # compilation option
 CC=g++
@@ -198,7 +192,7 @@ CFLAGS_CHECK=-std=c++11 -O0 -Wno-deprecated -g
 bin/main: obj/events.o \
           obj/main.o   \
           obj/MemTimeProgression.o
-	${CC} ${CFLAGS} -o $@ $^ ${LIB_DUO} 
+	${CC} ${CFLAGS} -o $@ $^ ${LIB_TRI} 
 
 obj/events.o: src/events.cxx src/events.h src/lists.h
 	${CC} ${CFLAGS} ${ccflg} -c $< -o $@
@@ -402,6 +396,32 @@ struct MemTimeProgression {
 #include <fstream>
 #include "MemTimeProgression.h"
 
+
+// template to iterate through TClonesArray members
+// (will be used with members that return values with the add_class_lib.py loop)
+// will allow iteration such as ` for (auto track : dat.iter_track() ) { /* do stuff */ };
+template <class T> struct iterTCA {
+    TClonesArray* tca;
+    T* ptr;
+    iterTCA  (TClonesArray* _tca) : tca{_tca} {};
+
+    int index{0};
+    iterTCA begin() {
+        iterTCA iter {tca};
+        iter.ptr = (T*) tca->UncheckedAt(0);
+        return iter;
+    };
+    iterTCA end() {
+        iterTCA iter {tca};
+        iter.ptr=(T*)tca->UncheckedAt(tca->GetEntriesFast());
+        return iter;
+    };
+    void operator++() {ptr=(T*)tca->UncheckedAt(++index);};
+    T* operator*() {return ptr;};
+    bool operator!=(const iterTCA& rhs) { return ptr!=rhs.ptr;};
+};
+
+
 class events {
 public :
    TTree          *fChain;   //!pointer to the analyzed TTree or TChain
@@ -602,7 +622,7 @@ name="$${which_loop}"
 
 'main.cxx' :
 '''
-#include "src/events.h"
+#include "events.h"
 #include <sstream>
 #include <fstream>
 #include "TFile.h"
@@ -667,17 +687,19 @@ int main(int nargs, char** argv) {
 
 using namespace std;
 void $KEY_loop_name(events& dat, string _options) {
-    // Start of 
     cout << " Running fn \\"$KEY_loop_name\\"" << endl;
     istringstream options ( _options );
     int n_options = 0;
     string arg;
-    // options >> arg;
+    ioMsgTree msg_tree{false};
+    msg_tree.slurp_file("src/tower_cnt.cxx");
     while (options >> arg) {
         cout    << " Option " << n_options << ":  " << arg << endl;
         dat.log << " Option " << n_options << ":  " << arg << endl;
+        msg_tree.msg(Form(" Options %i : %s", n_options, arg.c_str()));
         ++n_options;
     }
+    msg_tree.write();
 
     // Histogram declarations here:
     // TH1D hg {"hg", "a;b;c", 10, 0., 1.};

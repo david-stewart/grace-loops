@@ -396,16 +396,17 @@ EOF
         else:
             if status in clones:
                 _class = best_matches_clones[status][0][0]
-                f_out.write(f'    //--accessor and pseudo-iterator for TClonesArray* (tca) {status}\n')
+                f_out.write(f'\n    //--accessor and iterator for TClonesArray* (tca) {status}\n')
                 f_out.write(f'    %-19s *tca_{status} {{new TClonesArray("{_class}")}};\n'%'TClonesArray')
-                f_out.write(f'    %-19s _size_{status}{{ 0}};\n'%'int');
-                f_out.write(f'    %-19s index_{status};\n'%'int');
-                f_out.write(f'    %-19s *{status} {{nullptr}};\n'%_class);
                 f_out.write(f'    %-19s *get_{status}(int=-1);\n'%_class);
-                f_out.write(f'    %-19s next_{status}();\n'%'bool');
-                f_out.write(f'    %-19s reset_{status}();\n'%'void');
-                f_out.write(f'    %-19s size_{status}() {{return tca_{status}->GetEntriesFast();}};\n'%'int');
-                f_out.write(f'    //--end {status} psuedo-iterator\n')
+                f_out.write(f'    %-19s  iter_{status} {{ tca_{status} }};\n'%('iterTCA<%s>'%_class));
+                f_out.write(f'    %-19s  size_{status}() {{ return tca_{status}->GetEntriesFast(); }};\n\n'%'int');
+                # f_out.write(f'    %-19s _size_{status}{{ 0}};\n'%'int');
+                # f_out.write(f'    %-19s index_{status};\n'%'int');
+                # f_out.write(f'    %-19s *{status} {{nullptr}};\n'%_class);
+                # f_out.write(f'    %-19s next_{status}();\n'%'bool');
+                # f_out.write(f'    %-19s reset_{status}();\n'%'void');
+                # f_out.write(f'    //--end {status} psuedo-iterator\n')
             elif status in classes:
                 f_out.write(f'    {best_matches_classes[status][0][0]:19s} *{status};\n')
 
@@ -467,27 +468,8 @@ EOF
             _class = best_matches_clones[status][0][0]
             text += f'''
 // Two  psuedo-iterator functions for TClonesArray({_class}) *tca_{status}
-bool events::next_{status}() {{
-    if (index_{status} == -2) {{ // initialize for the first time in a given event
-        _size_{status} = size_{status}();
-        index_{status} = -1;
-    }}
-    ++index_{status};
-    if (index_{status} >= _size_{status}) {{
-        reset_{status}();
-        return false;
-    }} else {{
-        {status} = ({_class}*) tca_{status}->UncheckedAt(index_{status});
-        return true;
-    }}
-}};
-void events::reset_{status}() {{
-    {status} = nullptr;
-    index_{status} = -2;
-}};
 {_class}* events::get_{status}(int i) {{
-    if (i==-1) return ({_class}*) tca_{status}->UncheckedAt(index_{status});
-    return ({_class}*) tca_{status}->At(i);
+    return ({_class}*) tca_{status}->UncheckedAt(i);
 }};
 '''
     set_tag_value('./src/events.cxx','Coda Functions',text) 
