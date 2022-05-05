@@ -417,7 +417,7 @@ template <class T> struct iterTCA {
         return iter;
     };
     void operator++() {ptr=(T*)tca->UncheckedAt(++index);};
-    T* operator*() {return ptr;};
+    T& operator*() {return *ptr;};
     bool operator!=(const iterTCA& rhs) { return ptr!=rhs.ptr;};
 };
 
@@ -692,14 +692,14 @@ void $KEY_loop_name(events& dat, string _options) {
     int n_options = 0;
     string arg;
     ioMsgTree msg_tree{false};
-    msg_tree.slurp_file("src/tower_cnt.cxx");
+    // msg_tree.slurp_file("src/test_loop.cxx");
     while (options >> arg) {
         cout    << " Option " << n_options << ":  " << arg << endl;
         dat.log << " Option " << n_options << ":  " << arg << endl;
-        msg_tree.msg(Form(" Options %i : %s", n_options, arg.c_str()));
+        // msg_tree.msg(Form(" Options %i : %s", n_options, arg.c_str()));
         ++n_options;
     }
-    msg_tree.write();
+    // msg_tree.write();
 
     // Histogram declarations here:
     // TH1D hg {"hg", "a;b;c", 10, 0., 1.};
@@ -1185,6 +1185,59 @@ EOF
         fix_double_branches('src/events.cxx')
     add_trigger_fnc()
 
+def hadz(name=None, ztag=None, o_tag=None):
+    if not name:
+        print('hadz required a name argument')
+        exit(1)
+    else:
+        print(f'Running hadd in output "out-data/{name}/"')
+
+    if o_tag:
+        o_tag = '_'+o_tag
+    else:
+       o_tag = '' 
+
+    hadd_files = glob(f'out-data/{name}/out-files/*.root')        
+    if not (hadd_files):
+        print (f'fatal: no out-data/{name}/out-files/*.root files to hadd')
+        exit(1)
+
+
+    if os.path.isfile(f'out-data/{name}/hadd{o_tag}.root'):
+        print(f'warning: writing over out-data/{name}/hadd{o_tag}.root')
+
+    _out = subprocess.Popen(f'hadd -fkT out-data/{name}/hadd{o_tag}.root {" ".join(hadd_files)}',shell=True)
+    stdout,stderr = _out.communicate()
+    try:
+        stdout = stdout.decode('utf-8')
+        print(f'out msg:\n {stdout}')
+
+        stderr = stderr.decode('utf-8')
+        print(f'err msg:\n {stderr}')
+    except:
+        pass
+
+    tree_obj = []
+    try:
+        _out = subprocess.Popen(f'''root -l {hadd_files[0]}<<EOF  > __temp_types
+.ls
+EOF
+''', shell=True)
+        for line in open('__temp_types','r').readlines():
+            if 'KEY: TTree' in line:
+                tree_obj.append(line.split(';')[0].split()[-1])
+    except:
+        pass 
+#-------------------------------
+    for tree in tree_obj:
+        _out = subprocess.Popen(
+            f'rootcp {hadd_files[0]}:{tree} out-data/{name}/hadd{o_tag}.root',shell=True);
+    # except:
+        # pass
+
+    print('suggested:')
+    print(f'scp grace:{os.getcwd()}/out-data/{name}/hadd{o_tag}.root .') 
+
 def hadd(name=None, o_tag=None):
     if not name:
         text = Path('Makefile').read_text()
@@ -1254,6 +1307,7 @@ def parse_args():
             ' uses TREE_NAME & N_FILES')
     parser_mode.add_argument('-a','--add-loop',  help='add a loop')
     parser_mode.add_argument('-d','--hadd',      help='hadd an existing loop')
+    parser_mode.add_argument('-z','--hadz',     help='hadd an existing with subset name')
     parser_mode.add_argument('-c','--copy-loop', 
     help='copy an existing loop; requires name from and name to', nargs=2)
 
@@ -1263,12 +1317,13 @@ def parse_args():
     parser.add_argument('-n','--n-files',   
             help="Divide slurm submissions into this many jobs. Default:10", type=int, default=10)
     parser.add_argument('--tag',            help='tag name for hadd')
+    parser.add_argument('-x','--xtag',      help='subset name for file for hadd')
     parser.add_argument('--n-array-files',   
             help="Number of files read to TChain for finding max array sizes. Default:20. Use -1 for all", type=int, default=15)
     parser.add_argument('-p','--print-path', help='output for copy-paste; if want all use "."')
     args = parser.parse_args()
 
-    if not (args.setup or args.add_loop or args.hadd or args.copy_loop or args.print_path):
+    if not (args.setup or args.add_loop or args.hadd or args.hadz or args.copy_loop or args.print_path):
         parser.print_help()
         exit()
 
